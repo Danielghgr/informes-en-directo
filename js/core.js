@@ -65,9 +65,42 @@
       .replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'partido';
   }
 
+  // ---------- Estadísticas ----------
+  // Aciertos, dudas y errores (errores = "Error" + "Omisión"), por árbitro y cuarto.
+  // Una jugada con los dos árbitros cuenta para cada uno y una sola vez en el total.
+  function statClass(resultado) {
+    return resultado === 'Acierto' ? 'ok' : resultado === 'Duda' ? 'doubt' : 'err';
+  }
+
+  function computeStats(match, plays) {
+    const hasOT = plays.some((p) => String(p.periodo).charAt(0) === 'P');
+    const keys = ['Q1', 'Q2', 'Q3', 'Q4'].concat(hasOT ? ['P'] : []);
+    const groups = [
+      { key: 'r1', name: refName(match, 1), custom: String(match.ref1 || '').trim(), label: 'Árbitro 1', sel: (p) => !!p.r1 },
+      { key: 'r2', name: refName(match, 2), custom: String(match.ref2 || '').trim(), label: 'Árbitro 2', sel: (p) => !!p.r2 },
+      { key: 'all', name: 'Total partido', custom: '', label: 'Total partido', sel: () => true }
+    ];
+    return groups.map((g) => {
+      const rows = keys.map((k) => ({ key: k, label: k === 'P' ? 'Prórroga' : k, ok: 0, doubt: 0, err: 0, n: 0 }));
+      const total = { key: 'T', label: 'Total', ok: 0, doubt: 0, err: 0, n: 0 };
+      plays.filter(g.sel).forEach((p) => {
+        const k = String(p.periodo).charAt(0) === 'P' ? 'P' : p.periodo;
+        const row = rows.find((r) => r.key === k);
+        const c = statClass(p.resultado);
+        if (row) { row[c] += 1; row.n += 1; }
+        total[c] += 1; total.n += 1;
+      });
+      return { key: g.key, name: g.name, custom: g.custom, label: g.label, rows, total };
+    });
+  }
+
+  // Porcentaje entero para mostrar (null si no hay jugadas)
+  const pct = (x, n) => (n ? Math.round(x * 100 / n) : null);
+
   const api = {
     TYPES, RESULTS, RES_CLASS, periodIndex, sortPlays, refName, matchTitle,
-    playRefNames, todayISO, fmtDate, fmtDateNumeric, fmtDateTime, slug
+    playRefNames, todayISO, fmtDate, fmtDateNumeric, fmtDateTime, slug,
+    statClass, computeStats, pct
   };
   root.Core = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

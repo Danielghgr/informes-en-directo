@@ -94,7 +94,7 @@
 
   // ---------- XML de la hoja de cálculo ----------
   // Estilos (índices en styles.xml)
-  const S = { def: 0, header: 1, wrap: 2, center: 3, ok: 4, doubt: 5, err: 6, omit: 7, label: 8 };
+  const S = { def: 0, header: 1, wrap: 2, center: 3, ok: 4, doubt: 5, err: 6, omit: 7, label: 8, pct: 9, totNum: 10, totPct: 11, totLabel: 12 };
 
   const esc = (s) => String(s)
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
@@ -158,7 +158,7 @@
     '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>' +
     '<font><b/><sz val="11"/><name val="Calibri"/></font>' +
     '</fonts>' +
-    '<fills count="7">' +
+    '<fills count="8">' +
     '<fill><patternFill patternType="none"/></fill>' +
     '<fill><patternFill patternType="gray125"/></fill>' +
     '<fill><patternFill patternType="solid"><fgColor rgb="FF0D1117"/><bgColor indexed="64"/></patternFill></fill>' +
@@ -166,10 +166,11 @@
     '<fill><patternFill patternType="solid"><fgColor rgb="FFFFD9A8"/><bgColor indexed="64"/></patternFill></fill>' +
     '<fill><patternFill patternType="solid"><fgColor rgb="FFF5B5AF"/><bgColor indexed="64"/></patternFill></fill>' +
     '<fill><patternFill patternType="solid"><fgColor rgb="FFE08A8A"/><bgColor indexed="64"/></patternFill></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFE4E7EB"/><bgColor indexed="64"/></patternFill></fill>' +
     '</fills>' +
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="9">' +
+    '<cellXfs count="13">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +
@@ -179,6 +180,10 @@
     '<xf numFmtId="0" fontId="2" fillId="5" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf>' +
     '<xf numFmtId="0" fontId="2" fillId="6" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<xf numFmtId="9" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center"/></xf>' +
+    '<xf numFmtId="0" fontId="2" fillId="7" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf>' +
+    '<xf numFmtId="9" fontId="2" fillId="7" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf>' +
+    '<xf numFmtId="0" fontId="2" fillId="7" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
     '</cellXfs>' +
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
     '</styleSheet>';
@@ -230,6 +235,37 @@
 
   // ---------- Informe de partidos ----------
   const RES_STYLE = { 'Acierto': S.ok, 'Duda': S.doubt, 'Error': S.err, 'Omisión': S.omit };
+
+  // Tabla de estadísticas en formato "largo" (una fila por árbitro/periodo): fácil de filtrar y de usar en tablas dinámicas
+  function statsSheet(ordered, playsByMatch, multi) {
+    const head = (multi ? ['Partido', 'Fecha'] : []).concat(
+      ['Grupo', 'Periodo', 'Aciertos', '% Aciertos', 'Dudas', '% Dudas', 'Errores (con omisiones)', '% Errores', 'Jugadas']);
+    const widths = (multi ? [30, 12] : []).concat([24, 11, 10, 11, 10, 9, 14, 10, 9]);
+    const rows = [head.map((t) => ({ v: t, s: S.header }))];
+    const ratio = (x, n) => (n ? x / n : '');
+
+    ordered.forEach((m) => {
+      C.computeStats(m, playsByMatch[m.id] || []).forEach((g) => {
+        const grp = g.key === 'all' ? g.label : (g.custom ? g.label + ' (' + g.name + ')' : g.label);
+        g.rows.concat([g.total]).forEach((r) => {
+          const tot = r.key === 'T';
+          const txt = tot ? S.totLabel : S.def;
+          const num = tot ? S.totNum : S.center;
+          const pc = tot ? S.totPct : S.pct;
+          const row = [];
+          if (multi) row.push({ v: C.matchTitle(m), s: txt }, { v: C.fmtDateNumeric(m.date), s: txt });
+          row.push(
+            { v: grp, s: txt }, { v: r.label, s: txt },
+            { v: r.ok, s: num }, { v: ratio(r.ok, r.n), s: pc },
+            { v: r.doubt, s: num }, { v: ratio(r.doubt, r.n), s: pc },
+            { v: r.err, s: num }, { v: ratio(r.err, r.n), s: pc },
+            { v: r.n, s: num });
+          rows.push(row);
+        });
+      });
+    });
+    return { name: 'Estadísticas', header: true, freeze: 1, filter: true, cols: widths, rows };
+  }
 
   function reportSheets(matches, playsByMatch) {
     const multi = matches.length > 1;
@@ -300,6 +336,7 @@
       });
     });
 
+    sheets.push(statsSheet(ordered, playsByMatch, multi));
     sheets.push({ name: 'Jugadas', header: true, freeze: 1, filter: true, cols: widths, rows });
     return sheets;
   }

@@ -293,3 +293,29 @@ dialog.dlg::backdrop { background: rgba(0, 0, 0, .55); }
 @media (prefers-reduced-motion: no-preference) {
   .thumb { transition: left .06s linear; }
 }
+
+/* ---------- Estadísticas ---------- */
+.statlink { width: 100%; margin-bottom: 12px; }
+.stblock { margin-bottom: 18px; }
+.stblock h2 { margin-bottom: 6px; font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
+.stblock.all { padding-top: 14px; border-top: 2px dotted var(--line); }
+.st-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+table.st { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.st th, .st td { padding: 8px 4px; text-align: center; }
+.st thead th { font-size: 13px; font-weight: 800; border-bottom: 3px solid var(--ink); }
+.st thead th.ok { border-bottom-color: var(--ok); }
+.st thead th.doubt { border-bottom-color: var(--doubt); }
+.st thead th.err { border-bottom-color: var(--err); }
+.st tbody th, .st tfoot th { text-align: left; padding-left: 12px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.st tbody tr + tr > * { border-top: 1px solid var(--line); }
+.st td b { display: block; font-size: 18px; line-height: 1.1; }
+.st td small { display: block; font-size: 12px; color: var(--muted); }
+.st td.zero, .st td.dim { color: var(--muted); }
+.st td.dim b { font-weight: 500; }
+.st tfoot tr > * { border-top: 2px solid var(--ink); background: var(--bg); }
+.st tfoot td b { font-size: 20px; }
+.prop { display: flex; height: 10px; margin-top: 8px; border-radius: 5px; overflow: hidden; gap: 2px; }
+.prop span.ok { background: var(--ok); }
+.prop span.doubt { background: var(--doubt); }
+.prop span.err { background: var(--err); }
+.stnote { line-height: 1.4; }

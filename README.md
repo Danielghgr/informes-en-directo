@@ -1,7 +1,7 @@
 # Registro Arbitral
 
 App web instalable (PWA) para registrar jugadas de baloncesto y valorar si están bien arbitradas.
-Funciona sin conexión, guarda los datos solo en el móvil de cada usuario y exporta a Excel.
+Funciona sin conexión, guarda los datos solo en el móvil de cada usuario, calcula estadísticas y exporta a Excel.
 Coste: 0 €. No necesita servidor ni cuentas.
 
 ## Contenido
@@ -17,6 +17,18 @@ js/xlsx.js            generador de Excel sin librerías
 js/app.js             pantallas y lógica
 icons/                iconos de la app
 ```
+
+## Versión 2: estadísticas
+
+En el registro de cada partido, **Ver estadísticas** muestra tres bloques: árbitro 1, árbitro 2 y total del partido.
+Cada bloque desglosa **aciertos, dudas y errores** por cuarto (con una fila de prórroga si la hay) y su total, con
+números y porcentajes.
+
+- **Errores** = errores + omisiones.
+- Una jugada marcada con los dos árbitros cuenta para cada uno y **una sola vez** en el total del partido
+  (por eso la suma de los dos árbitros puede superar el total).
+- Los porcentajes son sobre las jugadas de cada fila.
+- El Excel incluye una hoja nueva **Estadísticas** con las mismas tablas.
 
 ## Publicar con GitHub Pages (recomendado)
 

@@ -1,6 +1,6 @@
 /* Service worker: guarda la app en caché para que funcione sin conexión.
    IMPORTANTE: cada vez que cambies cualquier archivo de la app, sube el número de versión. */
-const VERSION = 'v1.0.0';
+const VERSION = 'v2.0.0';
 const CACHE = 'registro-arbitral-' + VERSION;
 const ASSETS = [
   './',

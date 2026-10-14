@@ -3,7 +3,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '1.0.0';
+  const APP_VERSION = '2.0.0';
   const { TYPES, RESULTS, RES_CLASS, sortPlays, refName, matchTitle, fmtDate, todayISO, playRefNames, slug } = Core;
   const app = document.getElementById('app');
   const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -307,6 +307,8 @@
       h('ul', {},
         h('li', {}, 'En un árbitro: cambiar su nombre.'),
         h('li', {}, 'En un cuarto (Q1–Q4): pasar a prórroga (P1–P4) y volver.')),
+      h('h3', {}, 'Estadísticas'),
+      h('p', {}, 'En el registro de cada partido, «Ver estadísticas» muestra aciertos, dudas y errores (con omisiones) por árbitro y cuarto. También van en una hoja del Excel.'),
       h('h3', {}, 'Tus datos'),
       h('p', {}, 'Todo se guarda solo en este dispositivo. Exporta a Excel los partidos finalizados y usa «Copia de seguridad» del menú del inicio por si cambias de móvil.'),
       storage,
@@ -329,7 +331,8 @@
     [/^\/match\/([\w-]+)\/edit$/, (id) => matchForm(id)],
     [/^\/live\/([\w-]+)$/, (id) => live(id, null)],
     [/^\/live\/([\w-]+)\/play\/([\w-]+)$/, (id, pid) => live(id, pid)],
-    [/^\/log\/([\w-]+)$/, (id) => log(id)]
+    [/^\/log\/([\w-]+)$/, (id) => log(id)],
+    [/^\/stats\/([\w-]+)$/, (id) => stats(id)]
   ];
 
   async function route() {
@@ -901,6 +904,7 @@
 
     const menuBtn = iconBtn('menu', 'Más opciones', () => toggleMenu(menuBtn, [
       { label: 'Editar datos del partido', run: () => go('/match/' + matchId + '/edit') },
+      { label: 'Estadísticas', run: () => go('/stats/' + matchId) },
       { label: 'Exportar a Excel', run: () => exportMatches([matchId]) },
       done ? { label: 'Reabrir partido', run: reopen } : { label: 'Finalizar partido', run: finish },
       { label: 'Eliminar partido', run: removeMatch, danger: true }
@@ -928,8 +932,71 @@
     drawList();
     const root = h('div', { class: 'screen' },
       bar({ title: 'Registro', back: done ? '#/' : '#/live/' + matchId, actions: [menuBtn] }),
-      h('main', { class: 'page' }, summary, plays.length ? filters : null, countEl, listEl),
+      h('main', { class: 'page' }, summary,
+        plays.length ? h('a', { class: 'btn statlink', href: '#/stats/' + matchId }, 'Ver estadísticas') : null,
+        plays.length ? filters : null, countEl, listEl),
       foot);
+    return { el: root };
+  }
+
+  /* ======================= Estadísticas ======================= */
+
+  async function stats(matchId) {
+    const match = await DB.get('matches', matchId);
+    if (!match) return notFound();
+    const plays = await DB.playsByMatch(matchId);
+    const data = Core.computeStats(match, plays);
+    const done = match.status === 'done';
+
+    const COLS = [['ok', 'Aciertos'], ['doubt', 'Dudas'], ['err', 'Errores']];
+
+    function cell(r, key) {
+      if (!r.n) return h('td', { class: 'zero' }, '–');
+      return h('td', { class: r[key] ? '' : 'dim' }, h('b', {}, String(r[key])), h('small', {}, Core.pct(r[key], r.n) + '%'));
+    }
+    function row(r, isTotal) {
+      return h('tr', { class: isTotal ? 'total' : '' },
+        h('th', { scope: 'row' }, r.label),
+        COLS.map(([key]) => cell(r, key)),
+        h('td', { class: r.n ? '' : 'zero' }, r.n ? h('b', {}, String(r.n)) : '–'));
+    }
+
+    function block(g) {
+      const t = g.total;
+      const title = g.key === 'all' ? 'Total partido'
+        : (g.custom ? g.label + ' · ' + g.name : g.label);
+      const table = h('table', { class: 'st' },
+        h('thead', {}, h('tr', {},
+          h('th', { scope: 'col' }, 'Cuarto'),
+          COLS.map(([key, label]) => h('th', { scope: 'col', class: key }, label)),
+          h('th', { scope: 'col' }, 'Jugadas'))),
+        h('tbody', {}, g.rows.map((r) => row(r, false))),
+        h('tfoot', {}, row(t, true)));
+      const prop = t.n
+        ? h('div', { class: 'prop', role: 'img', 'aria-label': 'Aciertos ' + t.ok + ', dudas ' + t.doubt + ', errores ' + t.err },
+          COLS.map(([key]) => (t[key] ? h('span', { class: key, style: 'flex:' + t[key] }) : null)))
+        : null;
+      return h('section', { class: 'stblock' + (g.key === 'all' ? ' all' : '') }, h('h2', {}, title), h('div', { class: 'st-wrap' }, table), prop);
+    }
+
+    const body = h('main', { class: 'page' },
+      h('div', { class: 'summary' },
+        h('div', { class: 't' }, matchTitle(match)),
+        h('div', { class: 'small muted' }, plays.length + (plays.length === 1 ? ' jugada' : ' jugadas') + (done ? ' · Finalizado' : ' · En curso'))));
+    if (!plays.length) {
+      body.append(h('div', { class: 'empty' }, h('b', {}, 'Aún no hay jugadas'), 'Las estadísticas aparecerán cuando anotes la primera jugada.'));
+    } else {
+      data.forEach((g) => body.append(block(g)));
+      body.append(h('p', { class: 'small muted stnote' },
+        'Errores incluye las omisiones. Una jugada marcada con los dos árbitros cuenta para cada uno y una sola vez en el total del partido. Los porcentajes son sobre las jugadas de cada fila.'));
+    }
+
+    const root = h('div', { class: 'screen' },
+      bar({ title: 'Estadísticas', back: '#/log/' + matchId }),
+      body,
+      h('div', { class: 'foot' },
+        h('a', { class: 'btn big', href: '#/log/' + matchId }, 'Registro'),
+        h('button', { type: 'button', class: 'btn big primary', onclick: () => exportMatches([matchId]) }, 'Exportar a Excel')));
     return { el: root };
   }
 
