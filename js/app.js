@@ -3,7 +3,19 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '2.0.0';
+  const APP_VERSION = '3.2.0';
+  Sync.setVersion(APP_VERSION);
+
+  // Entorno de pruebas: se nota en el título, en la cabecera y en el nombre del icono
+  const ENV = Core.env();
+  if (ENV) {
+    const tag = ENV.toUpperCase();
+    document.title = 'Registro Arbitral · ' + tag;
+    document.body.dataset.env = ENV;
+    document.documentElement.style.setProperty('--env-label', JSON.stringify(' · ' + tag));
+    const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (meta) meta.setAttribute('content', 'Arbitral ' + tag);
+  }
   const { TYPES, RESULTS, RES_CLASS, sortPlays, refName, matchTitle, fmtDate, todayISO, playRefNames, slug } = Core;
   const app = document.getElementById('app');
   const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -253,7 +265,9 @@
     }
     const matches = data.matches.filter((m) => m && typeof m.id === 'string');
     const ids = new Set(matches.map((m) => m.id));
-    const plays = data.plays.filter((p) => validPlay(p) && ids.has(p.matchId));
+    const plays = data.plays
+      .map((p) => (p && typeof p === 'object' ? Object.assign({}, p, { tipo: Core.normTipo(p.tipo) }) : p))
+      .filter((p) => validPlay(p) && ids.has(p.matchId));
     const ok = await confirmDlg('Importar copia',
       'Se importarán ' + matches.length + ' partido(s) y ' + plays.length + ' jugada(s). ' +
       'Si un partido ya existe en este dispositivo, se sustituirá por el de la copia.', 'Importar');
@@ -310,7 +324,9 @@
       h('h3', {}, 'Estadísticas'),
       h('p', {}, 'En el registro de cada partido, «Ver estadísticas» muestra aciertos, dudas y errores (con omisiones) por árbitro y cuarto. También van en una hoja del Excel.'),
       h('h3', {}, 'Tus datos'),
-      h('p', {}, 'Todo se guarda solo en este dispositivo. Exporta a Excel los partidos finalizados y usa «Copia de seguridad» del menú del inicio por si cambias de móvil.'),
+      Sync.enabled()
+        ? h('p', {}, 'Los partidos se guardan en este dispositivo y, al finalizarlos, se envía una copia a ' + Sync.adminName() + ' (ver menú ☰ → «Privacidad y envío»). Exporta a Excel los partidos finalizados y usa «Copia de seguridad» por si cambias de móvil.')
+        : h('p', {}, 'Todo se guarda solo en este dispositivo. Exporta a Excel los partidos finalizados y usa «Copia de seguridad» del menú del inicio por si cambias de móvil.'),
       storage,
       h('p', { class: 'muted small' }, 'Versión ' + APP_VERSION)));
   }
@@ -340,6 +356,11 @@
     if (cleanup) { try { cleanup(); } catch (e) { /* nada */ } cleanup = null; }
     closeMenu();
     clearToast();
+    if (Sync.needsConsent()) {
+      app.replaceChildren(consentView().el);
+      window.scrollTo(0, 0);
+      return;
+    }
     const path = (location.hash || '#/').slice(1) || '/';
     let view = null;
     try {
@@ -374,6 +395,88 @@
   }
   const blank = () => ({ el: h('div') });
 
+  /* ======================= Aviso de privacidad y envío ======================= */
+
+  const syncLabel = (m) => (m.syncPending ? 'Pendiente de enviar' : (m.syncedAt ? 'Enviado' : ''));
+  function syncLine(m, cls) {
+    if (!Sync.enabled() || m.status !== 'done') return null;
+    const t = syncLabel(m);
+    return t ? h('div', { class: cls || 'card-meta sync', dataset: { sync: m.id } }, t) : null;
+  }
+  window.addEventListener('ra-synced', (e) => {
+    document.querySelectorAll('[data-sync="' + e.detail.id + '"]').forEach((el) => { el.textContent = 'Enviado'; });
+  });
+
+  function sentList() {
+    return h('ul', {},
+      h('li', {}, 'Tu alias.'),
+      h('li', {}, 'Los datos del partido: equipos, fecha, competición, lugar, nombres de los árbitros y notas.'),
+      h('li', {}, 'Todas las jugadas: cuarto, minuto, árbitro, tipo, resultado y observaciones.'));
+  }
+
+  function consentView() {
+    const admin = Sync.adminName();
+    const alias = h('input', { type: 'text', maxlength: '30', placeholder: 'Tu nombre o alias', autocomplete: 'off', 'aria-label': 'Alias' });
+    const btn = h('button', { type: 'button', class: 'btn big primary', 'aria-disabled': 'true' }, 'Aceptar y continuar');
+    alias.addEventListener('input', () => btn.setAttribute('aria-disabled', String(!alias.value.trim())));
+    btn.addEventListener('click', () => {
+      const a = alias.value.trim();
+      if (!a) return toast('Escribe un alias para continuar');
+      Sync.accept(a);
+      route();
+      Sync.flush();
+    });
+    return {
+      el: h('div', { class: 'screen' },
+        h('header', { class: 'bar' }, h('h1', { class: 'bar-title' }, 'Registro Arbitral')),
+        h('main', { class: 'page consent' },
+          h('h2', {}, 'Antes de empezar'),
+          h('p', {}, 'Esta app guarda tus partidos en tu móvil. Además, cuando ', h('b', {}, 'finalices un partido'),
+            ', se envía automáticamente una copia a ' + admin + ' para llevar un control de uso y estadísticas.'),
+          h('h3', {}, 'Qué se envía'),
+          sentList(),
+          h('p', {}, 'No se envía nada mientras el partido está en curso. El envío es automático, en segundo plano y cuando haya conexión.'),
+          h('p', {}, 'Evita escribir datos personales que no quieras compartir, por ejemplo en las observaciones.'),
+          h('p', {}, 'Para que se borren tus datos, pídeselo a ' + admin + '. Puedes consultar esta información cuando quieras en el menú ☰ → «Privacidad y envío».'),
+          h('label', { class: 'field' }, h('span', {}, 'Alias (para que sepamos quién ha enviado cada partido)'), alias),
+          h('p', { class: 'small muted' }, 'Al pulsar «Aceptar y continuar» consientes este envío. Si no estás de acuerdo, no uses la app.')),
+        h('div', { class: 'foot' }, btn))
+    };
+  }
+
+  async function privacyDlg() {
+    if (!Sync.enabled()) {
+      return infoDlg('Privacidad', h('p', {}, 'En esta versión no se envía ningún dato. Todo se guarda solo en este dispositivo.'));
+    }
+    const admin = Sync.adminName();
+    const aliasEl = h('b', {}, Sync.alias());
+    const status = h('p', { class: 'small muted' });
+    const refresh = async () => {
+      const n = await Sync.pendingCount();
+      status.textContent = n ? 'Partidos pendientes de enviar: ' + n + '.' : 'No hay partidos pendientes de enviar.';
+    };
+    await refresh();
+    infoDlg('Privacidad y envío', h('div', {},
+      h('p', {}, 'Cuando finalizas un partido, se envía automáticamente una copia a ' + admin + '.'),
+      h('h3', {}, 'Qué se envía'),
+      sentList(),
+      h('p', {}, 'Tu alias: ', aliasEl),
+      h('div', { class: 'row2' },
+        h('button', {
+          type: 'button', class: 'btn small',
+          onclick: async () => {
+            const a = await promptDlg('Cambiar alias', 'Alias', Sync.alias());
+            if (a) { Sync.setAlias(a); aliasEl.textContent = Sync.alias(); }
+          }
+        }, 'Cambiar alias'),
+        h('button', {
+          type: 'button', class: 'btn small',
+          onclick: async () => { status.textContent = 'Enviando…'; await Sync.flush(); await refresh(); }
+        }, 'Enviar ahora')),
+      status,
+      h('p', { class: 'small muted' }, 'Para que se borren tus datos, pídeselo a ' + admin + '.')));
+  }
+
   /* ======================= Inicio ======================= */
 
   async function home() {
@@ -389,8 +492,9 @@
       { label: 'Copia de seguridad (JSON)', run: backup },
       { label: 'Importar copia de seguridad', run: importBackup },
       { label: deferredInstall ? 'Instalar la app' : 'Cómo instalar la app', run: installHelp },
+      Sync.enabled() ? { label: 'Privacidad y envío', run: privacyDlg } : null,
       { label: 'Ayuda', run: helpDlg }
-    ]));
+    ].filter(Boolean)));
     const root = h('div', { class: 'screen' }, bar({ title: 'Registro Arbitral', actions: [menuBtn] }), body, foot);
 
     function byTab(done) {
@@ -405,7 +509,8 @@
       const info = h('div', { class: 'card-body' },
         h('div', { class: 'card-title' }, matchTitle(m)),
         meta ? h('div', { class: 'card-meta' }, meta) : null,
-        h('div', { class: 'card-meta' }, refName(m, 1) + ' · ' + refName(m, 2)));
+        h('div', { class: 'card-meta' }, refName(m, 1) + ' · ' + refName(m, 2)),
+        syncLine(m));
       const count = h('div', { class: 'card-count' }, h('b', {}, String(n)), n === 1 ? 'jugada' : 'jugadas');
       if (selecting && isDone) {
         const cb = h('input', {
@@ -505,7 +610,9 @@
       const now = Date.now();
       if (existing) {
         Object.assign(existing, data, { updatedAt: now });
+        if (existing.status === 'done' && Sync.enabled()) existing.syncPending = true;
         await DB.put('matches', existing);
+        Sync.flush();
         toast('Datos guardados');
         go('/log/' + existing.id, true);
       } else {
@@ -538,17 +645,17 @@
       f.per = [1, 2, 3, 4].includes(d.per) ? d.per : 1;
       const max = f.ot ? 4 : 9;
       f.min = Number.isInteger(d.min) ? clamp(d.min, 0, max) : max;
-      f.tipo = TYPES.includes(d.tipo) ? d.tipo : null;
+      f.tipo = TYPES.includes(Core.normTipo(d.tipo)) ? Core.normTipo(d.tipo) : null;
       f.res = RESULTS.includes(d.res) ? d.res : null;
       f.obs = typeof d.obs === 'string' ? d.obs.slice(0, 500) : '';
     }
     return f;
   }
   function loadDraft(matchId) {
-    try { return cleanForm(JSON.parse(localStorage.getItem('ra:draft:' + matchId))); } catch (e) { return blankForm(); }
+    try { return cleanForm(JSON.parse(localStorage.getItem(Core.lsKey('draft:' + matchId)))); } catch (e) { return blankForm(); }
   }
   function saveDraft(matchId, f) {
-    try { localStorage.setItem('ra:draft:' + matchId, JSON.stringify(f)); } catch (e) { /* nada */ }
+    try { localStorage.setItem(Core.lsKey('draft:' + matchId), JSON.stringify(f)); } catch (e) { /* nada */ }
   }
   const formFromPlay = (p) => cleanForm({
     r1: p.r1, r2: p.r2, ot: p.periodo.charAt(0) === 'P', per: Number(p.periodo.slice(1)),
@@ -806,9 +913,9 @@
 
     if (!editing) {
       let seen = false;
-      try { seen = localStorage.getItem('ra:hint1') === '1'; } catch (e) { /* nada */ }
+      try { seen = localStorage.getItem(Core.lsKey('hint1')) === '1'; } catch (e) { /* nada */ }
       if (!seen) {
-        try { localStorage.setItem('ra:hint1', '1'); } catch (e) { /* nada */ }
+        try { localStorage.setItem(Core.lsKey('hint1'), '1'); } catch (e) { /* nada */ }
         setTimeout(() => toast('Mantén pulsado un árbitro para cambiar su nombre y un cuarto para pasar a prórroga.', { ms: 8000 }), 400);
       }
     }
@@ -880,7 +987,9 @@
       if (!ok) return;
       match.status = 'done';
       match.updatedAt = Date.now();
+      if (Sync.enabled()) match.syncPending = true;
       await DB.put('matches', match);
+      Sync.flush();
       toast('Partido finalizado');
       route();
     }
@@ -897,7 +1006,7 @@
       const ok = await confirmDlg('Eliminar partido', 'Se borrarán el partido y todas sus jugadas. No se puede deshacer.', 'Eliminar', true);
       if (!ok) return;
       await DB.deleteMatch(matchId);
-      try { localStorage.removeItem('ra:draft:' + matchId); } catch (e) { /* nada */ }
+      try { localStorage.removeItem(Core.lsKey('draft:' + matchId)); } catch (e) { /* nada */ }
       toast('Partido eliminado');
       go('/', true);
     }
@@ -915,6 +1024,7 @@
       h('div', { class: 't' }, matchTitle(match)),
       meta ? h('div', { class: 'small muted' }, meta) : null,
       h('div', { class: 'small muted' }, refName(match, 1) + ' · ' + refName(match, 2) + (done ? ' · Finalizado' : ' · En curso')),
+      syncLine(match, 'small sync'),
       match.notes ? h('div', { class: 'small', style: 'margin-top:6px' }, match.notes) : null);
 
     const filters = h('div', { class: 'filters' },
@@ -1024,8 +1134,28 @@
     });
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', route);
-  else route();
+  window.addEventListener('online', () => Sync.flush());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Sync.flush(); });
+  // Renombra en los datos guardados los tipos de acción con nombre antiguo (p. ej. «AoS» → «DI/FL/D»)
+  async function migrateTypes() {
+    const legacy = Object.keys(Core.LEGACY_TYPES);
+    const old = (await DB.all('plays')).filter((p) => legacy.includes(p.tipo));
+    if (!old.length) return;
+    await DB.putPlays(old.map((p) => Object.assign({}, p, { tipo: Core.normTipo(p.tipo) })));
+    if (!Sync.enabled()) return;
+    // Los partidos ya enviados se reenvían para que la hoja de Google también quede actualizada
+    for (const id of new Set(old.map((p) => p.matchId))) {
+      const m = await DB.get('matches', id);
+      if (m && m.status === 'done' && m.syncedAt) { m.syncPending = true; await DB.put('matches', m); }
+    }
+  }
+  async function boot() {
+    try { await migrateTypes(); } catch (e) { console.warn('Migración de tipos:', e); }
+    route();
+    Sync.flush();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
   window.addEventListener('load', registerServiceWorker);
   tryPersist();
 })();

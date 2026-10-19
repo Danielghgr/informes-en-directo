@@ -2,7 +2,6 @@
 (function (root) {
   'use strict';
 
-  const NAME = 'registro-arbitral';
   const VERSION = 1;
   let dbp = null;
 
@@ -10,7 +9,7 @@
     if (dbp) return dbp;
     dbp = new Promise((resolve, reject) => {
       if (!root.indexedDB) return reject(new Error('IndexedDB no disponible'));
-      const req = indexedDB.open(NAME, VERSION);
+      const req = indexedDB.open(Core.dbName(), VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains('matches')) db.createObjectStore('matches', { keyPath: 'id' });
@@ -51,6 +50,9 @@
   const playsByMatch = (matchId) => run(['plays'], 'readonly', (s) => s.index('matchId').getAll(matchId));
   const countPlays = (matchId) => run(['plays'], 'readonly', (s) => s.index('matchId').count(matchId));
 
+  // Guarda varias jugadas de una vez (una sola transacción)
+  const putPlays = (plays) => run(['plays'], 'readwrite', (ps) => { plays.forEach((p) => ps.put(p)); });
+
   // Borra el partido y todas sus jugadas
   async function deleteMatch(matchId) {
     const plays = await playsByMatch(matchId);
@@ -71,5 +73,5 @@
     });
   }
 
-  root.DB = { all, get, put, del, playsByMatch, countPlays, deleteMatch, bulkImport };
+  root.DB = { all, get, put, del, playsByMatch, countPlays, deleteMatch, bulkImport, putPlays };
 })(typeof self !== 'undefined' ? self : globalThis);

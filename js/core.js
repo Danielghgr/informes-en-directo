@@ -2,7 +2,10 @@
 (function (root) {
   'use strict';
 
-  const TYPES = ['Falta', 'Violación', 'Mecánica', 'AoS', 'Control', 'Otro'];
+  const TYPES = ['Falta', 'Violación', 'Mecánica', 'DI/FL/D', 'Control', 'Otro'];
+  // Nombres antiguos de tipos de acción -> nombre actual (para datos guardados con versiones anteriores)
+  const LEGACY_TYPES = { 'AoS': 'DI/FL/D' };
+  const normTipo = (t) => (Object.prototype.hasOwnProperty.call(LEGACY_TYPES, t) ? LEGACY_TYPES[t] : t);
   const RESULTS = ['Acierto', 'Duda', 'Error', 'Omisión'];
   const RES_CLASS = { 'Acierto': 'ok', 'Duda': 'doubt', 'Error': 'err', 'Omisión': 'omit' };
   const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -97,10 +100,27 @@
   // Porcentaje entero para mostrar (null si no hay jugadas)
   const pct = (x, n) => (n ? Math.round(x * 100 / n) : null);
 
+  // ---------- Entorno (PRO = vacío, PRE = "pre", ...) ----------
+  // Dos instalaciones en la misma cuenta de GitHub Pages comparten dominio y, por tanto, almacenamiento
+  // del navegador. Cada entorno usa su propia base de datos y sus propias claves para no mezclar datos.
+  function env() {
+    const e = String((root.RA_CONFIG || {}).env || '').trim().toLowerCase();
+    return /^[a-z0-9-]{1,12}$/.test(e) ? e : '';
+  }
+  // En PRO (entorno vacío) las claves son 'ra:...', exactamente como en las versiones anteriores.
+  function lsKey(name) {
+    const e = env();
+    return 'ra' + (e ? '-' + e : '') + ':' + name;
+  }
+  function dbName() {
+    const e = env();
+    return 'registro-arbitral' + (e ? '-' + e : '');
+  }
+
   const api = {
     TYPES, RESULTS, RES_CLASS, periodIndex, sortPlays, refName, matchTitle,
     playRefNames, todayISO, fmtDate, fmtDateNumeric, fmtDateTime, slug,
-    statClass, computeStats, pct
+    statClass, computeStats, pct, env, lsKey, dbName, LEGACY_TYPES, normTipo
   };
   root.Core = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

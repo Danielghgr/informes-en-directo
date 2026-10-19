@@ -13,6 +13,8 @@ sw.js                 modo sin conexión (service worker)
 css/styles.css        estilos
 js/core.js            reglas comunes (tipos, resultados, orden de jugadas)
 js/db.js              almacenamiento local (IndexedDB)
+js/config.js          configuración del envío de partidos (vacío = desactivado)
+js/sync.js            envío automático al finalizar un partido
 js/xlsx.js            generador de Excel sin librerías
 js/app.js             pantallas y lógica
 icons/                iconos de la app
@@ -29,6 +31,20 @@ números y porcentajes.
   (por eso la suma de los dos árbitros puede superar el total).
 - Los porcentajes son sobre las jugadas de cada fila.
 - El Excel incluye una hoja nueva **Estadísticas** con las mismas tablas.
+
+## Versión 3: envío de partidos finalizados
+
+Al finalizar un partido, la app puede enviar una copia a una Hoja de Google del administrador, en segundo plano y
+cuando haya conexión. Está **desactivado por defecto**: solo se activa si `js/config.js` tiene una dirección
+`syncUrl`. Al activarlo, cada usuario ve un aviso de privacidad al abrir la app y debe aceptarlo con un alias.
+
+Configuración paso a paso: `GUIA-ENVIO-DATOS.md`. El script de Google es `Code.gs` (no se sube al repositorio).
+
+## Entornos PRE y PRO
+
+El mismo código sirve para un entorno de pruebas y para producción. Solo cambian `js/config.js` (`env: 'pre'`
+en pruebas, `env: ''` en producción), `manifest.webmanifest` e `icons/`. Cada entorno guarda sus datos por
+separado en el móvil. Procedimiento completo, promoción a producción y vuelta atrás: `GUIA-ENTORNOS.md`.
 
 ## Publicar con GitHub Pages (recomendado)
 

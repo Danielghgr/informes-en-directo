@@ -319,3 +319,16 @@ table.st { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 .prop span.doubt { background: var(--doubt); }
 .prop span.err { background: var(--err); }
 .stnote { line-height: 1.4; }
+
+/* ---------- Aviso de privacidad y envío ---------- */
+.consent h2 { margin-bottom: 10px; font-size: 22px; font-weight: 800; }
+.consent h3 { margin: 14px 0 4px; font-size: 15px; font-weight: 800; }
+.consent p { margin: 8px 0; }
+.consent ul { margin: 6px 0; padding-left: 20px; }
+.consent li { margin: 3px 0; }
+.consent .field { margin-top: 16px; }
+.sync { font-weight: 700; }
+
+/* ---------- Entorno de pruebas (PRE) ---------- */
+body[data-env] .bar { border-top: 5px solid var(--doubt); }
+.bar-title::after { content: var(--env-label, ""); color: var(--muted); font-weight: 600; }
